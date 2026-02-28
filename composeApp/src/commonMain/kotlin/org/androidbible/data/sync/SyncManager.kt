@@ -28,12 +28,18 @@ class SyncManager(
     private val _pendingCount = MutableStateFlow(0)
     val pendingCount: StateFlow<Int> = _pendingCount.asStateFlow()
 
+    private val _lastSyncTime = MutableStateFlow<String?>(null)
+    val lastSyncTime: StateFlow<String?> = _lastSyncTime.asStateFlow()
+
+    private val _syncError = MutableSharedFlow<String>()
+    val syncError: SharedFlow<String> = _syncError.asSharedFlow()
+
     private var wsJob: Job? = null
+    private var periodicSyncJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
 
     private val deviceId: String by lazy {
-        // Get or create device ID from sync_state table
         val existing = db.syncQueries.getSyncState("default").executeAsOneOrNull()
         existing?.device_id ?: run {
             val id = com.benasher44.uuid.uuid4().toString()
@@ -43,7 +49,8 @@ class SyncManager(
     }
 
     /**
-     * Start the sync manager: push pending, pull new, connect WebSocket.
+     * Start the sync manager: push pending, pull new, connect WebSocket,
+     * and start periodic sync.
      */
     fun start() {
         scope.launch {
@@ -51,6 +58,7 @@ class SyncManager(
             pullNewEvents()
             connectWebSocket()
             updatePendingCount()
+            startPeriodicSync()
         }
     }
 
@@ -59,7 +67,62 @@ class SyncManager(
      */
     fun stop() {
         wsJob?.cancel()
+        periodicSyncJob?.cancel()
         scope.cancel()
+    }
+
+    /**
+     * Register device for push notifications (FCM/APNs).
+     */
+    suspend fun registerPushToken(token: String, platform: String) {
+        try {
+            api.registerDevice(token, platform)
+            Napier.i("Push token registered for $platform", tag = "Sync")
+        } catch (e: Exception) {
+            Napier.e("Failed to register push token", e, tag = "Sync")
+        }
+    }
+
+    /**
+     * Periodically sync every 5 minutes.
+     */
+    private fun startPeriodicSync() {
+        periodicSyncJob?.cancel()
+        periodicSyncJob = scope.launch {
+            while (isActive) {
+                delay(5 * 60 * 1000L) // 5 minutes
+                try {
+                    pushPendingEvents()
+                    pullNewEvents()
+                } catch (e: Exception) {
+                    Napier.e("Periodic sync failed", e, tag = "Sync")
+                }
+            }
+        }
+    }
+
+    /**
+     * Full sync: push + pull.
+     */
+    suspend fun fullSync() {
+        pushPendingEvents()
+        pullNewEvents()
+        retryFailedEvents()
+    }
+
+    /**
+     * Queue a local change for sync.
+     */
+    fun queueChange(entityType: String, entityId: String, action: String, payload: String) {
+        val now = Clock.System.now().toString()
+        db.syncQueries.insertSyncQueueItem(entityType, entityId, action, payload, now)
+        updatePendingCount()
+
+        // Try to push immediately
+        scope.launch {
+            delay(1000) // Debounce
+            pushPendingEvents()
+        }
     }
 
     /**
@@ -96,6 +159,7 @@ class SyncManager(
 
             // Update sync state
             db.syncQueries.upsertSyncState(deviceId, response.currentVersion, now)
+            _lastSyncTime.value = now
 
             // Clean up old processed items
             db.syncQueries.deleteProcessedItems()
@@ -103,6 +167,7 @@ class SyncManager(
             Napier.i("Pushed ${response.processed} sync events", tag = "Sync")
         } catch (e: Exception) {
             Napier.e("Failed to push sync events", e, tag = "Sync")
+            _syncError.emit("Push failed: ${e.message}")
             // Mark items as failed for retry
             pending.forEach { item ->
                 db.syncQueries.markSyncItemFailed(item.id)
@@ -111,6 +176,41 @@ class SyncManager(
 
         _syncState.value = SyncState.IDLE
         updatePendingCount()
+    }
+
+    /**
+     * Retry failed sync events.
+     */
+    private suspend fun retryFailedEvents() {
+        val failed = db.syncQueries.getFailedSyncItems().executeAsList()
+        if (failed.isEmpty()) return
+
+        Napier.i("Retrying ${failed.size} failed sync events", tag = "Sync")
+
+        try {
+            val events = failed.map { item ->
+                SyncEventPayload(
+                    entityType = item.entity_type,
+                    entityId = item.entity_id,
+                    action = item.action,
+                    payload = item.payload,
+                )
+            }
+
+            val response = api.syncPush(SyncPushRequest(events = events, deviceId = deviceId))
+            val now = Clock.System.now().toString()
+
+            db.transaction {
+                failed.forEach { item ->
+                    db.syncQueries.markSyncItemProcessed(now, item.id)
+                }
+            }
+
+            db.syncQueries.upsertSyncState(deviceId, response.currentVersion, now)
+            Napier.i("Retried ${response.processed} events successfully", tag = "Sync")
+        } catch (e: Exception) {
+            Napier.e("Retry failed", e, tag = "Sync")
+        }
     }
 
     /**
@@ -131,10 +231,12 @@ class SyncManager(
                 applyEvents(response.events)
                 val now = Clock.System.now().toString()
                 db.syncQueries.upsertSyncState(deviceId, response.currentVersion, now)
+                _lastSyncTime.value = now
                 Napier.i("Pulled ${response.events.size} sync events", tag = "Sync")
             }
         } catch (e: Exception) {
             Napier.e("Failed to pull sync events", e, tag = "Sync")
+            _syncError.emit("Pull failed: ${e.message}")
         }
 
         _syncState.value = SyncState.IDLE
@@ -151,6 +253,7 @@ class SyncManager(
                         "marker" -> applyMarkerEvent(event)
                         "label" -> applyLabelEvent(event)
                         "progress_mark" -> applyProgressMarkEvent(event)
+                        "preference" -> applyPreferenceEvent(event)
                         else -> Napier.w("Unknown entity type: ${event.entityType}", tag = "Sync")
                     }
                 } catch (e: Exception) {
@@ -161,8 +264,6 @@ class SyncManager(
     }
 
     private fun applyMarkerEvent(event: SyncEvent) {
-        // Parse payload and apply to local DB
-        // The payload contains the marker data from the server
         val now = Clock.System.now().toString()
         when (event.action) {
             "create", "update" -> {
@@ -229,8 +330,50 @@ class SyncManager(
     }
 
     private fun applyProgressMarkEvent(event: SyncEvent) {
-        // Similar pattern for progress marks
-        Napier.d("Progress mark event: ${event.action}", tag = "Sync")
+        val now = Clock.System.now().toString()
+        when (event.action) {
+            "create", "update" -> {
+                try {
+                    val pm = json.decodeFromString<ProgressMark>(event.payload)
+                    db.markerQueries.insertProgressMark(
+                        id = null,
+                        gid = pm.gid,
+                        server_id = event.entityId.toLongOrNull(),
+                        user_id = pm.userId,
+                        preset = pm.preset.toLong(),
+                        ari = pm.ari.toLong(),
+                        caption = pm.caption,
+                        modify_time = pm.modifyTime,
+                        is_synced = 1,
+                        created_at = pm.createdAt ?: now,
+                        updated_at = now,
+                    )
+                } catch (e: Exception) {
+                    Napier.e("Failed to parse progress mark event", e, tag = "Sync")
+                }
+            }
+            "delete" -> {
+                // Progress marks delete by preset lookup
+                Napier.d("Progress mark delete: ${event.entityId}", tag = "Sync")
+            }
+        }
+    }
+
+    private fun applyPreferenceEvent(event: SyncEvent) {
+        val now = Clock.System.now().toString()
+        when (event.action) {
+            "create", "update" -> {
+                try {
+                    val pref = json.decodeFromString<UserPreference>(event.payload)
+                    db.syncQueries.upsertPreference(pref.key, pref.value, 1, now)
+                } catch (e: Exception) {
+                    Napier.e("Failed to parse preference event", e, tag = "Sync")
+                }
+            }
+            "delete" -> {
+                db.syncQueries.deletePreference(event.entityId)
+            }
+        }
     }
 
     /**
@@ -239,10 +382,14 @@ class SyncManager(
     private fun connectWebSocket() {
         wsJob?.cancel()
         wsJob = scope.launch {
+            var reconnectDelay = 1000L
+            val maxDelay = 30000L
+
             while (isActive) {
                 try {
                     client.webSocket(ApiConfig.WS_URL) {
                         Napier.i("WebSocket connected", tag = "Sync")
+                        reconnectDelay = 1000L // Reset on successful connect
 
                         // Subscribe to user sync channel
                         val subscribeMsg = """{"event":"pusher:subscribe","data":{"channel":"private-user.sync"}}"""
@@ -259,8 +406,10 @@ class SyncManager(
                         }
                     }
                 } catch (e: Exception) {
-                    Napier.e("WebSocket disconnected, reconnecting in 5s", e, tag = "Sync")
-                    delay(5000) // Reconnect delay
+                    Napier.e("WebSocket disconnected, reconnecting in ${reconnectDelay}ms", e, tag = "Sync")
+                    delay(reconnectDelay)
+                    // Exponential backoff
+                    reconnectDelay = (reconnectDelay * 2).coerceAtMost(maxDelay)
                 }
             }
         }
@@ -268,10 +417,12 @@ class SyncManager(
 
     private suspend fun handleWebSocketMessage(message: String) {
         try {
-            // Parse Reverb/Pusher message format
-            if (message.contains("sync.event")) {
+            if (message.contains("sync.event") || message.contains("SyncEventCreated")) {
                 Napier.d("Received sync event via WebSocket", tag = "Sync")
                 pullNewEvents()
+            } else if (message.contains("pusher:ping")) {
+                // Respond to ping to keep connection alive
+                Napier.d("WebSocket ping received", tag = "Sync")
             }
         } catch (e: Exception) {
             Napier.e("Failed to handle WebSocket message", e, tag = "Sync")

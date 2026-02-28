@@ -26,6 +26,40 @@ class ApiService(private val client: HttpClient) {
         }.body()
     }
 
+    suspend fun socialAuth(request: SocialAuthRequest): AuthResponse {
+        return client.post("api/v1/auth/social") {
+            setBody(request)
+        }.body()
+    }
+
+    suspend fun forgotPassword(request: ForgotPasswordRequest): MessageResponse {
+        return client.post("api/v1/auth/forgot-password") {
+            setBody(request)
+        }.body()
+    }
+
+    suspend fun resetPassword(request: ResetPasswordRequest): MessageResponse {
+        return client.post("api/v1/auth/reset-password") {
+            setBody(request)
+        }.body()
+    }
+
+    suspend fun changePassword(request: ChangePasswordRequest): MessageResponse {
+        return client.post("api/v1/auth/change-password") {
+            setBody(request)
+        }.body()
+    }
+
+    suspend fun updateProfile(request: UpdateProfileRequest): User {
+        return client.put("api/v1/auth/profile") {
+            setBody(request)
+        }.body<DataResponse<User>>().data
+    }
+
+    suspend fun deleteAccount(): MessageResponse {
+        return client.delete("api/v1/auth/account").body()
+    }
+
     suspend fun logout() {
         client.post("api/v1/auth/logout")
     }
@@ -68,6 +102,52 @@ class ApiService(private val client: HttpClient) {
         }.body<ListResponse<Verse>>().data
     }
 
+    // ========== Cross References & Footnotes ==========
+
+    suspend fun getCrossReferences(versionId: Long, ari: Int): List<CrossReference> {
+        return client.get("api/v1/bible/cross-references") {
+            parameter("version_id", versionId)
+            parameter("ari", ari)
+        }.body<ListResponse<CrossReference>>().data
+    }
+
+    suspend fun getFootnotes(versionId: Long, ari: Int): List<Footnote> {
+        return client.get("api/v1/bible/footnotes") {
+            parameter("version_id", versionId)
+            parameter("ari", ari)
+        }.body<ListResponse<Footnote>>().data
+    }
+
+    // ========== Compare Versions ==========
+
+    suspend fun compareVerses(ari: Int, versionIds: List<Long>): CompareResponse {
+        return client.get("api/v1/bible/compare") {
+            parameter("ari", ari)
+            versionIds.forEach { parameter("version_ids[]", it) }
+        }.body()
+    }
+
+    // ========== Reading History ==========
+
+    suspend fun getReadingHistory(): List<ReadingHistoryEntry> {
+        return client.get("api/v1/bible/reading-history").body<ListResponse<ReadingHistoryEntry>>().data
+    }
+
+    // ========== Verse of the Day ==========
+
+    suspend fun getVerseOfTheDay(): VerseOfTheDay {
+        return client.get("api/v1/verse-of-the-day").body<DataResponse<VerseOfTheDay>>().data
+    }
+
+    // ========== Sharing ==========
+
+    suspend fun getShareUrl(ari: Int, versionId: Long): ShareData {
+        return client.get("api/v1/share/verse") {
+            parameter("ari", ari)
+            parameter("version_id", versionId)
+        }.body<DataResponse<ShareData>>().data
+    }
+
     // ========== Markers ==========
 
     suspend fun getMarkers(kind: Int? = null): List<Marker> {
@@ -90,6 +170,18 @@ class ApiService(private val client: HttpClient) {
 
     suspend fun deleteMarker(id: Long) {
         client.delete("api/v1/markers/$id")
+    }
+
+    suspend fun batchCreateMarkers(markers: List<Marker>): List<Marker> {
+        return client.post("api/v1/markers/batch") {
+            setBody(mapOf("markers" to markers))
+        }.body<ListResponse<Marker>>().data
+    }
+
+    suspend fun exportMarkers(format: String = "json"): String {
+        return client.get("api/v1/markers/export") {
+            parameter("format", format)
+        }.body()
     }
 
     // ========== Labels ==========
@@ -178,6 +270,12 @@ class ApiService(private val client: HttpClient) {
         return client.get("api/v1/song-books/$bookId/songs").body<ListResponse<Song>>().data
     }
 
+    suspend fun searchSongs(query: String): List<Song> {
+        return client.get("api/v1/songs/search") {
+            parameter("q", query)
+        }.body<ListResponse<Song>>().data
+    }
+
     // ========== Sync ==========
 
     suspend fun syncPull(request: SyncPullRequest): SyncPullResponse {
@@ -195,6 +293,12 @@ class ApiService(private val client: HttpClient) {
     suspend fun syncStatus(deviceId: String): SyncStatus {
         return client.get("api/v1/sync/status") {
             parameter("device_id", deviceId)
+        }.body()
+    }
+
+    suspend fun registerDevice(token: String, platform: String): MessageResponse {
+        return client.post("api/v1/push/register") {
+            setBody(mapOf("token" to token, "platform" to platform))
         }.body()
     }
 
@@ -242,4 +346,39 @@ data class ListResponse<T>(
 data class ChapterResponse(
     val verses: List<Verse>,
     val pericopes: List<Pericope> = emptyList(),
+)
+
+@Serializable
+data class CompareResponse(
+    val ari: Int,
+    val versions: List<CompareVersionData>,
+)
+
+@Serializable
+data class CompareVersionData(
+    val versionId: Long,
+    val versionName: String,
+    val text: String,
+)
+
+@Serializable
+data class VerseOfTheDay(
+    val ari: Int,
+    val text: String,
+    val reference: String,
+    val versionName: String,
+)
+
+@Serializable
+data class ShareData(
+    val url: String,
+    val text: String,
+)
+
+@Serializable
+data class ReadingHistoryEntry(
+    val id: Long,
+    val ari: Int,
+    val versionId: Long,
+    val readAt: String,
 )

@@ -43,6 +43,11 @@ interface ProgressRepository {
 interface AuthRepository {
     suspend fun login(request: LoginRequest): AuthToken
     suspend fun register(request: RegisterRequest): AuthToken
+    suspend fun socialAuth(request: SocialAuthRequest): AuthToken
+    suspend fun forgotPassword(email: String)
+    suspend fun changePassword(request: ChangePasswordRequest)
+    suspend fun updateProfile(request: UpdateProfileRequest): User
+    suspend fun deleteAccount()
     suspend fun logout()
     suspend fun getProfile(): User
     fun isLoggedIn(): Flow<Boolean>
