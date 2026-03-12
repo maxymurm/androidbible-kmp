@@ -1,220 +1,211 @@
----
+﻿---
 applyTo: '**'
-lastUpdated: '2026-03-12 00:00'
-chatSession: 'session-001'
-projectName: 'Android Bible KMP'
+lastUpdated: '2026-03-12'
+chatSession: 'session-002'
+projectName: 'androidbible-kmp'
 ---
 
-# Project Memory - Android Bible KMP
+# Project Memory  androidbible-kmp (BibleCMP Compose Multiplatform App)
 
 > **AGENT INSTRUCTIONS:** Always read this file FIRST before starting any new conversation. Update after completing tasks, making decisions, or when user says "remember this".
 
 ---
 
-## 🎯 Current Focus
+##  Current Focus
 
-**Active Phase:** Phase 13 — Feature Parity & Enhancement (inspired by PocketSword)
-**Active Issue:** None (scoping just completed)
-**Current Branch:** main
-**Last Activity:** 2026-03-12 — Full project initialization, agent setup, new issues created
+**Active Phase:** Phase 13  Binary Readers (YES2/Bintex/Snappy)  
+**Active Issue:** None (scoping re-done with correct inspiration)  
+**Current Branch:** main  
+**Last Activity:** 2026-03-12  Re-scoped against actual inspiration: androidbible native Java  BibleCMP (Compose Multiplatform) porting guide.
 
-**What Was Accomplished (Phases 1-12):**
-- ✅ Phase 1: KMP project setup (Gradle multiplatform, shared/androidApp/iosApp modules)
-- ✅ Phase 2: Core data layer (SQLDelight schema, repositories, models)
-- ✅ Phase 3: DI with Koin, Ktor HTTP client, network layer
-- ✅ Phase 4: Authentication flow UI (login, register, token management)
-- ✅ Phase 5: Bible reader core (navigation, content rendering)
-- ✅ Phase 6: Markers/Annotations (bookmarks, notes, highlights)
-- ✅ Phase 7-8: Reading plans, devotionals, song books
-- ✅ Phase 9: Modern Compose UI (Material3 dark/light themes, fonts)
-- ✅ Phase 10: Testing (unit + integration)
-- ✅ Phase 11: CI/CD (GitHub Actions, fastlane, signed builds)
-- ✅ Phase 12: Documentation (README, KDoc, architecture diagram)
+**Phases 112 Complete:**
+-  Project scaffolding (KMP shared/androidApp/iosApp/desktopApp modules)
+-  Gradle version catalog (libs.versions.toml)
+-  Koin, SQLDelight, Ktor, Compose Multiplatform configured
+-  Basic DB schema, auth, markers (initial implementation)
+-  Sync engine (initial), reading plans, devotionals, songs
+-  All 85 original issues closed; committed and pushed
 
-**New Issues Created (Phase 13+):**
-- See GitHub issues for androidbible-kmp repo
-
-**Next Steps:**
-1. Implement pure-Kotlin SWORD engine (binary file readers)
-2. Module browser + installer screen
-3. Pins screen + PinsRepository
-4. Bookmark folders UI
-5. Commentary/Dictionary screens
-6. Strong's word study panel
-7. Onboarding flow
-8. Audio player (expect/actual per platform)
+**What's Next (Phase 13+)  androidbible Java  CMP Porting:**
+1. Port binary readers (BintexReader, SnappyCodec, Yes2Reader, Yes1Reader)
+2. Port data models (Marker, Label, Book, Ari, VersionInfo)
+3. Expand SQLDelight schema to match goldenBowl schema
+4. Build full Bible reader UI (verse list, chapter paging, pericopes, red letter)
+5. Navigation (Go-to dialog: book/chapter/verse, dialer, direct input)
+6. Full-text search with filters
+7. Complete markers system (bookmark/highlight/note + labels)
+8. Backend sync integration (goldenBowl API, delta sync)
+9. Reading plans, songs, devotions
+10. Platform polish (widgets, sharing, App Store submission)
 
 ---
 
-## 👤 User Preferences
+##  User Preferences
 
-### Project-Specific
-- **Tech Stack:** Kotlin Multiplatform 2.x, Compose Multiplatform, SQLDelight, Ktor, Koin
-- **Platforms:** Android API 21+, iOS 14+
-- **Architecture:** Clean architecture, MVVM in presentation layer, Repository pattern
-- **Navigation:** Compose Navigation (shared)
-- **DI:** Koin 3.x
-- **Networking:** Ktor with kotlinx.serialization
+### Tech Stack
+- **Platform:** Compose Multiplatform (Android + iOS + Desktop)
+- **Language:** 100% Kotlin (commonMain + platform-specific)
+- **DI:** Koin
+- **Database:** SQLDelight (multiplatform SQLite)
+- **Networking:** Ktor Client
+- **Serialization:** kotlinx.serialization
+- **UI:** Compose Multiplatform + Material3
+- **Real-time:** Pusher protocol via Ktor WebSocket (Laravel Reverb)
+- **Backend:** androidbible-api (goldenBowl reference, writes.gadsda.com)
+
+### Architecture
+- **Pattern:** MVVM  ViewModels + StateFlow in commonMain, no business logic in Composables
+- **Layers:** ui/  domain/usecase/  data/repository/  data/binary/ or data/db/
+- **expect/actual for:** file I/O (RandomAccessSource), platform DB driver, crypto, platform share
 
 ### Coding Style
-- **Language:** Kotlin idiomatic (data classes, sealed interfaces, coroutines, flows)
-- **State:** StateFlow + ViewModel pattern
-- **Commits:** Conventional commits with "Closes #N"
-- **expect/actual:** Used for platform-specific: audio, file I/O, notifications
-
-### Git Workflow
-- **Branch:** main
-- **Commits:** Conventional commits
-- **Auto-push:** After every commit
-- **CI:** GitHub Actions (build + test matrix Android/iOS)
+- 100% Kotlin, no Java in shared code
+- Conventional commits with "Closes #N"
+- MVVM  thin Composables, fat ViewModels
+- ARI encoding: `(bookId shl 16) or (chapter shl 8) or verse`
 
 ---
 
-## 📁 Project File Map
+##  Project File Map
 
-### Key Directories
 ```
 androidbible-kmp/
-├── .github/
-│   ├── instructions/memory.instruction.md  ← THIS FILE
-│   ├── ISSUE_TEMPLATE/
-│   └── workflows/ci.yml
-├── agents/                  ← AI automation templates
-├── docs/
-│   └── PROJECT_DOCUMENTATION.md
-├── shared/
-│   ├── src/commonMain/
-│   │   ├── data/            ← Repositories, models, DAOs
-│   │   ├── domain/          ← Use cases, domain models
-│   │   ├── presentation/    ← ViewModels, UI state classes
-│   │   └── di/              ← Koin modules
-│   ├── src/androidMain/     ← Android-specific implementations
-│   └── src/iosMain/         ← iOS-specific implementations
-├── composeApp/
-│   └── src/commonMain/
-│       └── ui/
-│           ├── screens/     ← All Compose screens
-│           ├── components/  ← Reusable composables
-│           └── theme/       ← Material3 theme, typography, colors
-├── androidApp/
-│   └── src/main/            ← Android entry point
-└── iosApp/
-    └── iosApp/              ← iOS entry point (Swift wrapper)
+ .github/instructions/memory.instruction.md   THIS FILE
+ agents/AUTONOMOUS_PROMPT_KMP.md
+ shared/src/commonMain/kotlin/
+    di/                         Koin modules
+    data/
+       model/                  Marker, Label, Book, VersionInfo, Ari, etc.
+       db/                     SQLDelight queries
+       repository/             MarkerRepository, LabelRepository, etc.
+       binary/
+           bintex/             BintexReader.kt, BintexWriter.kt
+           snappy/             SnappyCodec.kt, SnappyInputStream.kt
+           yes2/               Yes2Reader.kt + section/*.kt
+           yes1/               Yes1Reader.kt
+    domain/
+       usecase/                SearchUseCase, ReadingPlanUseCase, etc.
+       sync/                   SyncEngine.kt, ConflictResolver.kt
+    network/
+       api/                    Ktor client (SyncApi.kt, AuthApi.kt)
+       auth/                   AuthService.kt, TokenStorage.kt
+       websocket/              ReverbClient.kt (Pusher protocol)
+    ui/
+       reader/                 BibleReaderScreen, VerseList, VerseItem
+       navigation/             GotoScreen, DialerMode, DirectMode, BookGrid
+       search/                 SearchScreen, SearchResultItem, SearchFilters
+       markers/                MarkersScreen, NoteEditor, HighlightColorPicker
+       labels/                 LabelsScreen, LabelEditor
+       versions/               VersionsScreen, download manager
+       plans/                  ReadingPlansScreen, PlanProgressView
+       songs/                  SongsScreen, SongDetailScreen
+       devotions/              DevotionScreen
+       settings/               TextAppearancePanel, ColorPickerDialog
+       auth/                   LoginScreen, RegisterScreen
+       theme/                  Material3 theme, colors, typography
+    util/
+        Ari.kt                  ARI encode/decode utility
+        FormattedVerseText.kt   Red-letter, bold, formatting
+ shared/src/commonMain/sqldelight/     BibleDatabase.sq, queries
+ androidApp/
+ iosApp/
+ desktopApp/
 ```
 
-### Feature → Screen Mapping
-- **Auth:** `LoginScreen.kt`, `RegisterScreen.kt`
-- **Bible Reader:** `BibleReaderScreen.kt`, `BibleReaderViewModel.kt`
-- **Book/Chapter Selector:** `BookSelectorScreen.kt`, `ChapterSelectorScreen.kt`
-- **Bookmarks:** `BookmarksScreen.kt`, `BookmarksViewModel.kt`
-- **Notes:** `NotesScreen.kt`
-- **Highlights:** handled inline in BibleReader
-- **Labels:** `LabelsScreen.kt`
-- **Reading Plans:** `ReadingPlansScreen.kt`
-- **Songs:** `SongsScreen.kt`
-- **Search:** `SearchScreen.kt`
-- **Settings:** `SettingsScreen.kt`
+### Feature  File Mapping (from androidbible Java)
+| androidbible Source | CMP Target |
+|---------------------|------------|
+| `Yes2Reader.java` | `data/binary/yes2/Yes2Reader.kt` |
+| `BintexReader.java` | `data/binary/bintex/BintexReader.kt` |
+| `SnappyImplJava.java` | `data/binary/snappy/SnappyCodec.kt` |
+| `Marker.java` | `data/model/Marker.kt` |
+| `Label.java` | `data/model/Label.kt` |
+| `Ari.java` | `util/Ari.kt` |
+| `IsiActivity.kt` | `ui/reader/BibleReaderScreen.kt` |
+| `GotoActivity.kt` | `ui/navigation/GotoScreen.kt` |
+| `SearchActivity.java` | `ui/search/SearchScreen.kt` |
+| `MarkersActivity.kt` | `ui/markers/MarkersScreen.kt` |
 
 ---
 
-## 💭 Recent Decisions & Context
+##  Patterns & Architecture
 
-### 2026-03-12
+### Binary Reader Pipeline
+```
+YES2 file  SnappyInputStream  BintexReader  Section parsers
+ VersionInfoSection (metadata)
+ BooksInfoSection (book structure)
+ TextSection (verse text, UTF-8)
+ FootnotesSection
+ XrefsSection
+ PericopesSection
+```
 
-#### SWORD Engine Decision
-**Decision:** Implement pure-Kotlin SWORD engine (modeled after pocketsword KotlinSword module)
-**Rationale:** Enables offline Bible reading from `.zip`/`.sword` module files without API dependency
-**Key module types to support:**
-- `zText` (compressed Bible text — most modules)
-- `RawCom` (commentaries)
-- `RawLD4` / `zLD` (lexicon/dictionary)
-- `RawGenBook` (general books)
-**Versification systems:** KJV (primary), NRSV, NRSVA, Catholic, Catholic2, LXX, Eastern, Synodal
-
-#### Feature Gap Analysis vs PocketSword
-**Missing from KMP vs PocketSword inspiration:**
-1. Pure-Kotlin SWORD engine (binary file readers)
-2. SwordVersification.kt (8 versification systems)
-3. Module browser/catalog screen
-4. Module download manager
-5. Pins screen (PinsRepository + PinsViewModel + PinsScreen)
-6. Bookmark folders (hierarchical with color pickers)
-7. Commentary screen and panel
-8. Dictionary screen
-9. Strong's word study panel
-10. Onboarding flow (3-step wizard)
-11. Audio player (expect/actual per platform)
-12. Verse image generation / sharing
-13. History screen with navigation
-14. Profile screen
-15. Reading statistics / streaks
-16. Data export (DOCX/PDF)
-17. Tag/collection system
-18. Advanced search (phrase, Strong's, morphology filters)
-19. Study pad (rich text note editor)
-20. Parallel translation view
-
----
-
-## 🧩 Patterns & Architecture
+### Critical Binary Rules
+- **NO `java.io` in commonMain**  use expect/actual RandomAccessSource
+- **Snappy:** Port pure Java impl (`SnappyImplJava`), NOT the JNI native one
+- **BintexReader:** Replace DataInputStream with ByteArray + offset tracking
+- **UTF-8 decoding:** `String(bytes, Charsets.UTF_8)` or `byteArray.decodeToString()`
+- **YES2 strings:** Always UTF-8 decode after BintexReader reads bytes
 
 ### ARI Encoding
 ```kotlin
-val ari = (bookId shl 16) or (chapter shl 8) or verse
-```
-
-### SQLDelight Pattern
-- Schema defined in `.sq` files in `shared/src/commonMain/sqldelight/`
-- Queries generated as type-safe functions
-- `DatabaseDriverFactory` expect/actual for Android/iOS
-
-### ViewModel Pattern
-```kotlin
-class SomeViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(SomeUiState())
-    val uiState: StateFlow<SomeUiState> = _uiState.asStateFlow()
+object Ari {
+    fun encode(book: Int, chapter: Int, verse: Int): Int =
+        (book shl 16) or (chapter shl 8) or verse
+    fun book(ari: Int) = (ari shr 16) and 0xFF
+    fun chapter(ari: Int) = (ari shr 8) and 0xFF
+    fun verse(ari: Int) = ari and 0xFF
 }
 ```
 
-### Navigation
-- `NavController` shared via `LocalNavController.current`
-- Route constants in `Screen.kt` sealed class
-
-### SWORD Module System (PocketSword model)
+### SQLDelight Schema (goldenBowl alignment)
+```sql
+Marker(gid, ari, kind, caption, verseCount, createTime, modifyTime, deleted, syncRevision)
+Label(gid, title, ordering, backgroundColor, deleted, syncRevision)
+MarkerLabel(marker_gid, label_gid)  -- junction table
+ProgressMark(preset_id, caption, ari, modifyTime, syncRevision)
+InstalledVersion(locale, shortName, longName, filename, ordering, active)
+SyncState(syncSetName, revisionId, lastSyncAt)
 ```
-SwordEngine.kt          ← Entry point
-modules/
-  SwordModule.kt        ← Base module class
-  BibleModule.kt        ← zText/RawText reader
-  CommentaryModule.kt   ← RawCom reader
-  DictionaryModule.kt   ← RawLD4/zLD reader
-drivers/
-  ZTextDriver.kt        ← Compressed text decoder (LZW/zlib)
-  RawTextDriver.kt      ← Simple raw text reader
-  RawLD4Driver.kt       ← Lexicon/dictionary reader
-versification/
-  SwordVersification.kt ← Verse count tables
-  VersificationSystem.kt← Enum for all systems
+Marker kinds: 1=bookmark, 2=note, 3=highlight
+
+### Sync Protocol
+```
+Client changes  SyncEngine  POST /api/sync/  server processes
+ server returns delta since client revision
+ apply server changes in SQLDelight transaction
+ update local syncRevision
+ other devices notified via WebSocket (Reverb)
+```
+
+### MVVM Pattern
+```
+Composable  ViewModel (StateFlow)  UseCase  Repository  DB or Network
+                                   (no business logic in Composable)
 ```
 
 ---
 
-## 🔧 Things to Remember
+##  Things to Remember
 
-- **GitHub Repo:** https://github.com/maxymurm/androidbible-kmp
-- **Project Board:** #6 — Android Bible - Compose Multiplatform (https://github.com/users/maxymurm/projects/6)
-- **Build:** `./gradlew build` (cross-platform)
-- **Android Run:** `./gradlew :androidApp:installDebug`
-- **Tests:** `./gradlew :shared:allTests`
-- **CI:** `.github/workflows/ci.yml` (pre-existing)
-- **KMP Compose Version:** Check `gradle/libs.versions.toml`
+- **Repo:** https://github.com/maxymurm/androidbible-kmp
+- **Reference app:** androidbible Java source (BintexReader.java, Yes2Reader.java, etc.)
+- **Reference backend:** goldenBowl (writings.gadsda.com) / androidbible-api
+- **Marker kinds:** 1=bookmark, 2=note, 3=highlight (match goldenBowl)
+- **GIDs:** UUID v4, generated client-side
+- **Sync is transactional:** SQLDelight transaction for applying server changes
+- **Echo prevention:** device_id in sync payloads, filter WebSocket events
+- **iOS:** Swift only in iosApp entry point  all logic in commonMain Kotlin
+- **expect/actual needed for:** RandomAccessSource (file I/O), DB driver, crypto, permissions
+- **Platform modules:** androidApp for WorkManager (background sync), iosApp for BGTasks
 
 ---
 
-## 📊 Project Statistics
+##  Project Statistics
 
-- **Total Issues Created:** See GitHub
-- **Phases Completed:** 12 of 12 original + new enhancement phases
-- **Screens:** 15+ Compose screens
-- **Shared modules:** shared, composeApp
-- **Platform targets:** Android + iOS
+**Phases Completed:** 12 of 12 original  
+**In Progress:** Phase 13+ (androidbible native feature porting)  
+**88 Features to Port:** per FEATURE_PARITY_MATRIX.md  
+**~140 Issues Total:** across 8 new phases (1320)  
+**Estimated Effort:** ~340 hours remaining

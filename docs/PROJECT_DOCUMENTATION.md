@@ -1,450 +1,227 @@
-# Android Bible KMP — Project Documentation
+﻿# Project Documentation  androidbible-kmp
 
 **Repository:** https://github.com/maxymurm/androidbible-kmp  
-**Type:** Kotlin Multiplatform (KMP) + Compose Multiplatform mobile app  
-**Platforms:** Android (API 21+), iOS 14+  
-**Status:** Active development — Phases 1-12 complete, Phase 13+ in progress  
-**Last Updated:** 2026-03-12  
-**Project Board:** https://github.com/users/maxymurm/projects/6  
+**Type:** Compose Multiplatform Bible App (Android + iOS + Desktop)  
+**Reference source:** androidbible native Java/Android app  
+**Reference backend:** goldenBowl / androidbible-api  
+**Language:** 100% Kotlin  
+**Date:** 2026-03-12
 
 ---
 
-## Table of Contents
+## Project Overview
 
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Technology Stack](#technology-stack)
-4. [Project Structure](#project-structure)
-5. [Database Schema (SQLDelight)](#database-schema)
-6. [Screen Map](#screen-map)
-7. [Completed Phases (1–12)](#completed-phases)
-8. [Roadmap (Phase 13+)](#roadmap)
-9. [Development Setup](#development-setup)
-10. [Testing](#testing)
+androidbible-kmp is **BibleCMP**  a one-to-one port of the native `androidbible` Java/Android app to Kotlin Multiplatform + Compose Multiplatform. It targets Android, iOS, and Desktop from a single shared Kotlin codebase.
 
----
-
-## Overview
-
-Android Bible KMP is the Compose Multiplatform client for the Android Bible app. It runs natively on Android and iOS from a shared Kotlin codebase, with platform-specific implementations for audio, file I/O, and notifications via `expect`/`actual` declarations.
-
-**Core values:**
-- Offline-first (full local database, sync when connected)
-- SWORD module support (read standard Bible study software modules)
-- Shared Kotlin logic for both platforms
-- Material 3 design on Android, adapted for iOS
-
----
-
-## Architecture
-
-```
-┌──────────────────────────────────────────────────┐
-│             Compose Multiplatform UI              │
-│  (composeApp/src/commonMain/ui/screens/)          │
-└──────────────────────┬───────────────────────────┘
-                       │ StateFlow
-┌──────────────────────▼───────────────────────────┐
-│              Shared ViewModel Layer               │
-│  (shared/src/commonMain/presentation/)            │
-└──────────────────────┬───────────────────────────┘
-                       │ suspend / Flow
-┌──────────────────────▼───────────────────────────┐
-│               Domain / Use Cases                  │
-│  (shared/src/commonMain/domain/)                  │
-└──────────────────────┬───────────────────────────┘
-                       │
-        ┌──────────────┴──────────────┐
-        │                             │
-┌───────▼────────┐           ┌────────▼────────┐
-│   Local Data   │           │   Remote Data   │
-│  (SQLDelight)  │           │   (Ktor HTTP)   │
-│  offline-first │           │   androidbible  │
-│                │           │      -api       │
-└────────────────┘           └─────────────────┘
-```
-
-### Sync Strategy
-1. All mutations → local SQLDelight first (immediate)
-2. Enqueue mutation in `sync_queue` table
-3. On network: POST `/api/v1/sync/push` (batch)
-4. On reconnect / WebSocket event: GET `/api/v1/sync/pull`
-5. Conflict resolution: last-writer-wins (by `updated_at`)
+The app reads Bible text from **YES2/YES1 binary files** using pure Kotlin ports of `BintexReader`, `SnappyCodec`, and `Yes2Reader` (originally Java in androidbible). All user data (markers, labels, reading progress) is synced to the **androidbible-api** Laravel backend following the **goldenBowl** sync protocol.
 
 ---
 
 ## Technology Stack
 
-| Component                | Technology                     | Version    |
-|--------------------------|-------------------------------|------------|
-| Language                 | Kotlin                        | 2.x        |
-| Multiplatform            | Kotlin Multiplatform (KMP)    | 2.x        |
-| UI                       | Compose Multiplatform         | 1.7+       |
-| Design System            | Material 3                    | latest     |
-| Local Database           | SQLDelight                    | 2.x        |
-| HTTP Client              | Ktor                          | 3.x        |
-| Serialization            | kotlinx.serialization         | 1.7+       |
-| Dependency Injection     | Koin                          | 3.x        |
-| Image Loading            | Coil 3                        | 3.x        |
-| Navigation               | Compose Navigation            | 2.7+       |
-| Concurrency              | Kotlin Coroutines             | 1.9+       |
-| Build                    | Gradle (Kotlin DSL)           | 8.x        |
-| iOS interop              | Swift (minimal shell)         | 5.9+       |
+| Layer | Technology |
+|-------|-----------|
+| UI | Compose Multiplatform (Material3) |
+| Language | Kotlin Multiplatform 2.x |
+| DI | Koin |
+| Database (Local) | SQLDelight (multiplatform SQLite) |
+| Networking | Ktor Client |
+| Serialization | kotlinx.serialization |
+| Real-time | Pusher protocol via Ktor WebSocket |
+| Auth | Sanctum Bearer tokens, Google/Apple SDK |
+| Background sync | WorkManager (Android), BGTasks (iOS) |
+| Testing | JUnit5 + kotlin.test |
+| CI/CD | GitHub Actions |
 
 ---
 
-## Project Structure
+## Phases Completed (112)
 
-```
-androidbible-kmp/
-├── .github/
-│   ├── instructions/memory.instruction.md
-│   ├── ISSUE_TEMPLATE/
-│   ├── pull_request_template.md
-│   └── workflows/ci.yml
-├── agents/
-├── docs/
-│   └── PROJECT_DOCUMENTATION.md
-├── gradle/
-│   └── libs.versions.toml              ← Version catalog
-├── shared/
-│   ├── build.gradle.kts
-│   └── src/
-│       ├── commonMain/
-│       │   ├── kotlin/
-│       │   │   ├── data/
-│       │   │   │   ├── local/          ← SQLDelight DAOs
-│       │   │   │   ├── remote/         ← Ktor API client
-│       │   │   │   └── repository/     ← Repository impls
-│       │   │   ├── domain/
-│       │   │   │   ├── model/          ← Domain models
-│       │   │   │   └── usecase/        ← Use cases
-│       │   │   ├── presentation/
-│       │   │   │   └── viewmodel/      ← ViewModels + UiState
-│       │   │   └── di/
-│       │   │       └── AppModule.kt    ← Koin modules
-│       │   └── sqldelight/
-│       │       └── *.sq                ← SQLDelight schemas
-│       ├── androidMain/                ← Android expect/actual
-│       └── iosMain/                    ← iOS expect/actual
-├── composeApp/
-│   ├── build.gradle.kts
-│   └── src/commonMain/
-│       └── kotlin/
-│           └── ui/
-│               ├── screens/            ← Compose screens
-│               ├── components/         ← Reusable composables
-│               └── theme/
-│                   ├── Theme.kt
-│                   ├── Color.kt
-│                   └── Typography.kt
-├── androidApp/
-│   └── src/main/
-│       ├── AndroidManifest.xml
-│       └── kotlin/
-│           └── MainActivity.kt
-└── iosApp/
-    └── iosApp/
-        ├── iOSApp.swift
-        └── ContentView.swift
-```
+| Phase | Description | Issues |
+|-------|-------------|--------|
+| 1 | KMP Foundation & Project Structure | 8 |
+| 2 | Basic DB schema + Koin setup | 8 |
+| 3 | Auth UI (login, register, OAuth) | 8 |
+| 4 | Core Bible feature (initial reader) | 9 |
+| 5 | Basic markers (bookmark/highlight/note) | 8 |
+| 6 | Sync (initial) | 6 |
+| 7 | Reading plans (initial) | 5 |
+| 8 | Song books (initial) | 4 |
+| 9 | UI/UX (initial) | 8 |
+| 10 | Testing | 5 |
+| 11 | DevOps (CI/CD) | 6 |
+| 12 | Documentation | 5 |
 
 ---
 
-## Database Schema
+## Feature Porting Plan (Phases 1320)
 
-### SQLDelight Tables
+### Phase 13: Binary Readers (YES2/Bintex/Snappy)  ~14 issues
+**Goal:** Port all binary file format readers to pure Kotlin in commonMain  
+**Source:** androidbible Java modules (BintexReader/, AlkitabYes2/, Snappy/)
+
+| Source (Java) | Target (Kotlin) |
+|---|---|
+| `BintexReader.java` | `data/binary/bintex/BintexReader.kt` |
+| `BintexWriter.java` | `data/binary/bintex/BintexWriter.kt` |
+| `SnappyImplJava.java` | `data/binary/snappy/SnappyCodec.kt` |
+| `SnappyInputStream.java` | `data/binary/snappy/SnappyInputStream.kt` |
+| `Yes2Reader.java` | `data/binary/yes2/Yes2Reader.kt` |
+| `VersionInfoSection.java` | `data/binary/yes2/section/VersionInfoSection.kt` |
+| `BooksInfoSection.java` | `data/binary/yes2/section/BooksInfoSection.kt` |
+| `TextSection.java` | `data/binary/yes2/section/TextSection.kt` |
+| `FootnotesSection.java` | `data/binary/yes2/section/FootnotesSection.kt` |
+| `XrefsSection.java` | `data/binary/yes2/section/XrefsSection.kt` |
+| `PericopesSection.java` | `data/binary/yes2/section/PericopesSection.kt` |
+| `Yes1Reader.java` | `data/binary/yes1/Yes1Reader.kt` |
+| expect/actual | `RandomAccessSource` (platform I/O) |
+| integration | Tests with real YES2 files |
+
+**Critical constraints:**
+- NO `java.io` in commonMain  use `expect/actual RandomAccessSource`
+- Port pure Java Snappy (NOT JNI native)
+- BintexReader: replace DataInputStream with ByteArray + offset
+- Always UTF-8 decode YES2 strings
+
+### Phase 14: Data Models & SQLDelight Database  ~13 issues
+**Goal:** Port all data models and complete the SQLDelight schema
 
 ```sql
--- Bible versions
-CREATE TABLE BibleVersion (
-    id INTEGER PRIMARY KEY,
-    code TEXT NOT NULL,
-    name TEXT NOT NULL,
-    language TEXT NOT NULL,
-    is_installed INTEGER NOT NULL DEFAULT 0
-);
-
--- Bookmarks / Notes / Highlights (unified Marker)
-CREATE TABLE Marker (
-    id INTEGER PRIMARY KEY,
-    gid TEXT NOT NULL UNIQUE,
-    user_id INTEGER NOT NULL,
-    book_num INTEGER NOT NULL,
-    chapter_num INTEGER NOT NULL,
-    verse_num INTEGER NOT NULL,
-    ari INTEGER NOT NULL,
-    kind INTEGER NOT NULL,   -- 0=bookmark, 1=note, 2=highlight
-    color TEXT,
-    note TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0
-);
-
--- Labels / Collections
-CREATE TABLE MarkerLabel (
-    id INTEGER PRIMARY KEY,
-    gid TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    color TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-
--- Reading Plans
-CREATE TABLE ReadingPlan (
-    id INTEGER PRIMARY KEY,
-    title TEXT NOT NULL,
-    days_total INTEGER NOT NULL,
-    current_day INTEGER NOT NULL DEFAULT 0,
-    started_at TEXT
-);
-
--- Sync queue
-CREATE TABLE SyncQueueItem (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_kind TEXT NOT NULL,
-    payload TEXT NOT NULL,   -- JSON
-    created_at TEXT NOT NULL,
-    retry_count INTEGER NOT NULL DEFAULT 0
-);
-
--- Reading history
-CREATE TABLE ReadingHistoryItem (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ari INTEGER NOT NULL,
-    opened_at TEXT NOT NULL,
-    duration_ms INTEGER
-);
+Marker(gid, ari, kind, caption, verseCount, createTime, modifyTime, deleted, syncRevision)
+Label(gid, title, ordering, backgroundColor, deleted, syncRevision)
+MarkerLabel(marker_gid, label_gid)
+ProgressMark(preset_id, caption, ari, modifyTime, syncRevision)
+InstalledVersion(locale, shortName, longName, filename, ordering, active)
+SyncState(syncSetName, revisionId, lastSyncAt)
+ReadingPlan(version, name, title, description, duration, startTime)
+ReadingPlanProgress(readingPlan_id, reading_code, checkTime)
+ReadingHistory(ari, timestamp)
 ```
 
-### Planned Tables (Phase 13+)
+Models to port:
+`Ari.kt`, `Marker.kt`, `Label.kt`, `Book.kt`, `VersionInfo.kt`,
+`PericopeData.kt`, `FootnoteEntry.kt`, `XrefEntry.kt`, `ReadingPlan.kt`, `SyncPayload.kt`
 
-```sql
--- Pins
-CREATE TABLE Pin (
-    id INTEGER PRIMARY KEY,
-    gid TEXT NOT NULL UNIQUE,
-    ari INTEGER NOT NULL,
-    note TEXT,
-    created_at TEXT NOT NULL
-);
+### Phase 15: Core Bible Reader UI  ~20 issues
+**Goal:** Full Bible reading experience  
+**androidbible source:** `IsiActivity.kt`, `VersesControllerImpl.kt`, `FormattedVerseText.kt`
 
--- Bookmark folders
-CREATE TABLE BookmarkFolder (
-    id INTEGER PRIMARY KEY,
-    gid TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    parent_id INTEGER,
-    color TEXT,
-    FOREIGN KEY (parent_id) REFERENCES BookmarkFolder(id)
-);
-
--- SWORD modules
-CREATE TABLE SwordModule (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    type TEXT NOT NULL,   -- 'Bible', 'Commentary', 'Dictionary', 'GenBook'
-    language TEXT NOT NULL,
-    is_installed INTEGER NOT NULL DEFAULT 0,
-    install_path TEXT
-);
+Composables to build:
+```kotlin
+BibleReaderScreen    // main screen
+VerseList            // LazyColumn
+VerseItem            // single verse with formatting
+PericopeHeader       // section headers
+ChapterPager         // HorizontalPager swipe
+DrawerContent        // navigation drawer
+VersionsScreen       // download + manage versions
+TextAppearancePanel  // font size/face/colors settings
 ```
 
----
+Features: verse numbers, red-letter text, pericopes, night mode, footnotes display, cross-ref display, version selector, paragraph formatting
 
-## Screen Map
+### Phase 16: Navigation & Search  ~12 issues
+**Goal:** Complete verse navigation and full-text search  
+**androidbible source:** `GotoActivity.kt`, `SearchActivity.java`
 
-### Implemented Screens (Phases 1–12)
+- Go-to dialog: Book grid  Chapter grid  Verse grid
+- Dialer mode (numeric input `GotoDialerFragment`)
+- Direct mode ("John 3:16" text reference)
+- Full-text search with highlighting
+- Search filters (OT/NT, by book, regex)
+- Split-screen parallel reading (two versions)
+- Reading history (back/forward)
 
-| Screen                  | File                          | Status      |
-|-------------------------|-------------------------------|-------------|
-| Login                   | LoginScreen.kt                | ✅ Complete |
-| Register                | RegisterScreen.kt             | ✅ Complete |
-| Home / Dashboard        | HomeScreen.kt                 | ✅ Complete |
-| Bible Reader            | BibleReaderScreen.kt          | ✅ Complete |
-| Book Selector           | BookSelectorScreen.kt         | ✅ Complete |
-| Chapter Selector        | ChapterSelectorScreen.kt      | ✅ Complete |
-| Version Selector        | VersionSelectorScreen.kt      | ✅ Complete |
-| Bookmarks               | BookmarksScreen.kt            | ✅ Complete |
-| Notes                   | NotesScreen.kt                | ✅ Complete |
-| Labels                  | LabelsScreen.kt               | ✅ Complete |
-| Search                  | SearchScreen.kt               | ✅ Complete |
-| Reading Plans           | ReadingPlansScreen.kt         | ✅ Complete |
-| Devotionals             | DevotionalsScreen.kt          | ✅ Complete |
-| Songs                   | SongsScreen.kt                | ✅ Complete |
-| Settings                | SettingsScreen.kt             | ✅ Complete |
+### Phase 17: Markers & Labels System  ~14 issues
+**Goal:** Complete marker system  
+**androidbible source:** `Marker.java`, `MarkersActivity.kt`, `Label.java`
 
-### Planned Screens (Phase 13+)
+- Create/edit/delete bookmarks, highlights (color picker), notes (editor)
+- Multi-verse markers (verseCount)
+- Labels (create/edit/delete/reorder/color)
+- Assign labels to markers (many-to-many)
+- Markers list screen (filter by kind/label, sort by date/book)
+- Inline marker indicators in verse text
+- Context menu on verse long-press
 
-| Screen                  | File                          | Phase      |
-|-------------------------|-------------------------------|------------|
-| Onboarding (3-step)     | OnboardingScreen.kt           | Phase 13   |
-| Module Browser          | ModuleBrowserScreen.kt        | Phase 13   |
-| Module Downloader       | ModuleDownloadScreen.kt       | Phase 13   |
-| Pins                    | PinsScreen.kt                 | Phase 13   |
-| Bookmark Folders        | BookmarkFoldersScreen.kt      | Phase 14   |
-| Commentary Panel        | CommentaryScreen.kt           | Phase 14   |
-| Dictionary              | DictionaryScreen.kt           | Phase 14   |
-| Strong's Word Study     | WordStudyScreen.kt            | Phase 14   |
-| History                 | HistoryScreen.kt              | Phase 15   |
-| Profile                 | ProfileScreen.kt              | Phase 15   |
-| Reading Statistics      | StatisticsScreen.kt           | Phase 15   |
-| Audio Player            | AudioPlayerScreen.kt          | Phase 15   |
-| Verse Image Generator   | VerseImageScreen.kt           | Phase 16   |
-| Data Export             | ExportScreen.kt               | Phase 16   |
-| Advanced Search         | AdvancedSearchScreen.kt       | Phase 16   |
-| Parallel Translation    | ParallelTranslationScreen.kt  | Phase 16   |
+### Phase 18: Sync & Backend Integration  ~15 issues
+**Goal:** Full goldenBowl sync protocol client-side
 
----
+- `SyncEngine.kt`  delta sync logic
+- `SyncApi.kt` (Ktor)  `POST /api/sync/`, `GET /api/sync/full`, etc.
+- `AuthRepository.kt`  login, register, Google/Apple Sign-In
+- `ReverbClient.kt`  WebSocket (Pusher protocol) channel subscription
+- Private channel `private-user.{userId}` with event handlers
+- Echo prevention (device_id filtering)
+- `ConflictResolver.kt`  last-write-wins
+- Background sync (WorkManager/BGTasks)
+- Offline queue (retry on reconnect)
+- Sync status UI indicator
 
-## Completed Phases
+### Phase 19: Reading Plans, Devotions & Songs  ~12 issues
+**androidbible source:** `KpriModel`, `SongDb`, reading plan activities
 
-### Phase 1: KMP Project Setup
-- Gradle multiplatform configuration
-- Module structure: shared, composeApp, androidApp, iosApp
-- Version catalog (`libs.versions.toml`)
-- Base Material 3 theme
+- Reading plan browser (`ReadingPlansScreen.kt`)
+- Daily reading assignments
+- Progress tracking + calendar view
+- Multiple simultaneous plans
+- Devotional content display (`DevotionScreen.kt`)
+- Song database (SQLDelight: `SongDatabase.sq`)
+- Song browsing and search (`SongsScreen.kt`, `SongSearchScreen.kt`)
+- Song lyrics display (`SongDetailScreen.kt`)
 
-### Phase 2: Core Data Layer
-- SQLDelight schema (all core tables)
-- Repository interfaces (BibleRepository, MarkerRepository)
-- Domain models (Verse, Marker, ReadingPlan)
-
-### Phase 3: Network & DI
-- Ktor HTTP client (shared)
-- kotlinx.serialization DTOs
-- Koin module setup
-- API client (`ApiClient.kt`)
-
-### Phase 4: Authentication UI
-- LoginScreen + LoginViewModel
-- RegisterScreen
-- Token storage (DataStore)
-- AuthRepository + Koin integration
-
-### Phase 5: Bible Reader Core
-- BibleReaderScreen with verse list
-- Book / Chapter selectors
-- Version switcher
-- ARI-based navigation
-- Offline verse loading from SQLDelight
-
-### Phase 6: Markers & Annotations
-- Bookmark / Note / Highlight CRUD
-- Marker bottom sheet (long-press on verse)
-- Labels system
-- Sync integration (queue items on mutation)
-
-### Phase 7: Reading Plans
-- ReadingPlansScreen
-- Plan progress tracking
-- Daily reading navigation
-
-### Phase 8: Devotionals & Songs
-- DevotionalsScreen (date-based)
-- SongsScreen (hymnal)
-
-### Phase 9: Modern UI
-- Material 3 dark / light theme
-- Custom typography (Gentium for verse text)
-- Animation and transitions
-- Verse sharing composable
-
-### Phase 10: Testing
-- 20+ unit tests (`shared:allTests`)
-- ViewModel tests with Turbine
-- Repository tests with in-memory SQLDelight
-
-### Phase 11: CI/CD
-- GitHub Actions workflow (build + test on PRs)
-- Fastlane configuration (Android + iOS)
-- Signed release builds
-
-### Phase 12: Documentation
-- README with screenshots
-- KDoc on all public APIs
-- Architecture diagram
-- Changelog
+### Phase 20: Platform Polish & Release  ~15 issues
+- Share verse text (platform share sheet)
+- Copy to clipboard
+- Export/import markers (JSON)
+- Android home screen widget (Glance)
+- TTS (Text-to-Speech) for verse reading
+- Crash reporting (Sentry/Bugsnag KMP)
+- Accessibility (TalkBack, VoiceOver)
+- App icon + splash screen
+- Google Play submission
+- Apple App Store submission
+- Desktop distribution (GitHub Releases / DMG / MSI)
 
 ---
 
-## Roadmap
+## Feature Parity Matrix Summary
 
-### Phase 13: SWORD Engine & Modules
-- Pure-Kotlin SWORD engine (zText, RawCom, RawLD4, zLD binary readers)
-- `SwordVersification.kt` (KJV + 7 additional systems)
-- `SwordModuleConfig.kt` (.conf file parser)
-- Module browser screen (list installed + available)
-- Module download manager (progress tracking)
-- Pins feature (quick-access verse pins)
-- Onboarding flow (3-step setup wizard)
-
-### Phase 14: Study Tools
-- Commentary screen / panel (per verse)
-- Dictionary / Lexicon screen
-- Strong's word study panel (tap a word → Strong's entry)
-- Bookmark folders (hierarchical, with colors)
-- Enhanced highlights (6-color palette)
-- Rich-text note editor (Markdown)
-
-### Phase 15: User Profile & History
-- Profile screen
-- Reading history screen (calendar view)
-- Reading statistics (streaks, chapters/day)
-- Audio player (expect/actual per platform)
-
-### Phase 16: Advanced Features
-- Advanced search (phrase, Strong's, morphology filters)
-- Parallel translation view (two versions side by side)
-- Verse image generation and sharing
-- Data export (DOCX/PDF)
-- Tags / collection system
+| Phase | Features | Count |
+|-------|----------|-------|
+| 13 | Binary Readers | 7 |
+| 14 | Data Models & Database | 10 |
+| 15 | Core Reader + Appearance + Versions | 23 |
+| 16 | Navigation + Search + Split | 12 |
+| 17 | Markers + Labels | 14 |
+| 18 | Backend + Sync | 10 |
+| 19 | Plans + Devotions + Songs | 9 |
+| 20 | Polish + Platform-Specific | 8 |
+| **Total** | | **88 features** |
 
 ---
 
-## Development Setup
+## Running Locally
 
-### Prerequisites
-- Android Studio Hedgehog+ (or IntelliJ IDEA with KMP plugin)
-- JDK 17+
-- Xcode 15+ (for iOS builds)
-- Android SDK API 21+
-
-### Quick Start
 ```bash
-git clone https://github.com/maxymurm/androidbible-kmp.git
-cd androidbible-kmp
-
 # Android
-./gradlew :androidApp:installDebug
+./gradlew :androidApp:assembleDebug
+
+# Desktop
+./gradlew :desktopApp:run
 
 # iOS (macOS only)
-./gradlew :iosApp:build
+open iosApp/iosApp.xcodeproj
 
-# Shared tests
-./gradlew :shared:allTests
+# Tests (all platforms)
+./gradlew :shared:testDebugUnitTest
+./gradlew :shared:desktopTest
 ```
-
-### Environment
-Copy `.env.example` to `.env.local` and set `API_BASE_URL` to your API endpoint.
 
 ---
 
-## Testing
+## Related Repositories
 
-```bash
-# All shared tests
-./gradlew :shared:allTests
-
-# Android-specific tests
-./gradlew :androidApp:test
-
-# With HTML report
-./gradlew :shared:allTests --tests "*" --info
-```
-
-### Test Patterns
-- `*RepositoryTest.kt` — Repository tests with in-memory SQLDelight
-- `*ViewModelTest.kt` — ViewModel tests with Turbine for Flow
-- `*UseCaseTest.kt` — Use case unit tests
+- **API backend:** https://github.com/maxymurm/androidbible-api
+- **Original Android app:** https://github.com/maxymurm/androidbible
+- **Reference documentation:** C:\Users\maxmm\Downloads\inspiration\inspiration\
